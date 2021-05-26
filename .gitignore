@@ -133,3 +133,4 @@ dmypy.json
 *.tx
 
 _tmp.py
+*.rdb
