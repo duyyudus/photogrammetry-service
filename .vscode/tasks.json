@@ -6,7 +6,10 @@
     {
       "label": "Run Current File",
       "type": "shell",
-      "command": ".\\venv\\Scripts\\python ${file}",
+      "windows": {
+        "command": ".\\venv\\Scripts\\python ${file}"
+      },
+      "command": "./venv/bin/python ${file}",
       "group": {
         "kind": "build",
         "isDefault": true
