@@ -15,6 +15,15 @@
         "isDefault": true
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Run Server",
+      "type": "shell",
+      "windows": {
+        "command": ".\\venv\\Scripts\\python ${file}"
+      },
+      "command": "./venv/bin/python ${file}",
+      "problemMatcher": []
     }
   ]
 }

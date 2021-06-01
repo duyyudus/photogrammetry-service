@@ -13,9 +13,10 @@ deps = {
         'opencv-contrib-python',
         'dramatiq[redis, watch]',
         'piexif',
+        'Flask',
     ],
     'test': [],
-    'dev': ['pylint', 'autopep8', 'rope', 'black'],
+    'dev': ['pylint', 'flake8', 'autopep8', 'rope', 'black'],
 }
 deps['dev'] = deps['photogrammetry-service'] + deps['dev']
 deps['dev'] = deps['dev'] + deps['dev']
