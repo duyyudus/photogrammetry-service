@@ -14,6 +14,7 @@ deps = {
         'dramatiq[redis, watch]',
         'piexif',
         'Flask',
+        'Flask-PyMongo',
     ],
     'test': [],
     'dev': ['pylint', 'flake8', 'autopep8', 'rope', 'black'],

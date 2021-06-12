@@ -1,11 +1,13 @@
-from genericpath import exists
 import os
 import os.path as osp
 from logging.config import dictConfig
 from typing import Union
 
 from flask import Flask
+
 from . import api
+from .db import DB
+from .task_manager import TaskManager
 
 
 class ServerConfigNotFound(Exception):
@@ -14,27 +16,27 @@ class ServerConfigNotFound(Exception):
 
 def create_server(cfg: Union[str, dict]) -> Flask:
 
-    app = Flask(__name__)
+    server = Flask(__name__)
 
     if isinstance(cfg, str):
         if osp.exists(cfg):
-            app.config.from_pyfile(cfg, silent=True)
+            server.config.from_pyfile(cfg, silent=True)
         else:
             raise ServerConfigNotFound()
     elif isinstance(cfg, dict):
-        app.config.from_mapping(cfg)
+        server.config.from_mapping(cfg)
     else:
         raise ServerConfigNotFound()
 
     # Setup logger
-    os.makedirs(app.config['LOG_DIR'], exist_ok=1)
+    os.makedirs(server.config['LOG_DIR'], exist_ok=1)
 
     dictConfig(
         {
             'version': 1,
             'formatters': {
                 'default': {
-                    'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+                    'format': '[%(asctime)s] %(module)s.py %(levelname)s: %(message)s',
                 }
             },
             'handlers': {
@@ -44,22 +46,30 @@ def create_server(cfg: Union[str, dict]) -> Flask:
                     'formatter': 'default',
                 },
                 'file_handler': {
-                    'level': 'INFO',
+                    'level': server.config['LOG_LEVEL'],
                     'formatter': 'default',
                     'class': 'logging.FileHandler',
-                    'filename': app.config['SERVER_LOG'],
+                    'filename': server.config['SERVER_LOG'],
                     'mode': 'w',
                 },
             },
-            'root': {'level': 'INFO', 'handlers': ['console_handler', 'file_handler']},
+            'root': {
+                'level': server.config['LOG_LEVEL'],
+                'handlers': ['console_handler', 'file_handler'],
+            },
         }
     )
 
     # try:
-    #     os.makedirs(app.instance_path)
+    #     os.makedirs(server.instance_path)
     # except OSError:
     #     pass
 
-    api.route_api(app)
+    db = DB(server)
 
-    return app
+    task_manager = TaskManager(server.config, db)
+
+    api_handler = api.ApiHandler(server, task_manager, db)
+    api_handler.register_api()
+
+    return server
