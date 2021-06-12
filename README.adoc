@@ -1,3 +1,15 @@
 # Photogrammetry Service
 
 Backend for *Photogrammetry Service*
+
+*Prerequisite* : Redis as message queue broker.
+
+*Windows*
+
+`scripts/start_redis.cmd` : run Redis executable in `win_dependences` folder. You can also use Redis Docker as alternative.
+
+*Linux/Mac*
+
+`scripts/start_redis.sh` : run Redis Docker container.
+
+NOTE: Although this backend can run on Linux/Mac, some image processing components will be able to work only on Windows
