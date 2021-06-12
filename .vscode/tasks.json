@@ -20,9 +20,9 @@
       "label": "Run Server",
       "type": "shell",
       "windows": {
-        "command": ".\\venv\\Scripts\\python ${file}"
+        "command": "./run_server.cmd"
       },
-      "command": "./venv/bin/python ${file}",
+      "command": "./run_server.sh",
       "problemMatcher": []
     }
   ]
