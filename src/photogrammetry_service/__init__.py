@@ -5,9 +5,9 @@ from typing import Union
 
 from flask import Flask
 
-from . import api
+from .api import ApiHandler
 from .db import DB
-from .task_manager import TaskManager
+from .task_coordinator import DatabaseAdapter
 
 
 class ServerConfigNotFound(Exception):
@@ -60,16 +60,11 @@ def create_server(cfg: Union[str, dict]) -> Flask:
         }
     )
 
-    # try:
-    #     os.makedirs(server.instance_path)
-    # except OSError:
-    #     pass
-
     db = DB(server)
 
-    task_manager = TaskManager(server.config, db)
+    db_adaptor = DatabaseAdapter(server, db)
 
-    api_handler = api.ApiHandler(server, task_manager, db)
+    api_handler = ApiHandler(server, db_adaptor)
     api_handler.register_api()
 
     return server
