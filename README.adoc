@@ -2,7 +2,16 @@
 
 Backend for *Photogrammetry Service*
 
-*Prerequisite* : Redis as message queue broker.
+This is a multi-component system, including
+
+- `Redis` as message queue broker
+- `MongoDB` for database
+- `worker` ( based on `dramatiq` ) receives request and process `Task`, which contains many `Step` +
+Depend on `Step` of `Task`, there is additional external program that take over duty from `worker` (e.g. Reality Capture)
+- `Coordinator` monitors the state of tasks in database and send task processing requests to `worker`, as well as updating database
+- `Flask` server takes care of user REST APIs
+
+Each component is basically a standalone process.
 
 *Windows*
 
