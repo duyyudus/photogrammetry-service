@@ -20,9 +20,9 @@
       "label": "Run Server",
       "type": "shell",
       "windows": {
-        "command": "./run_server.cmd"
+        "command": "./scripts/run_server.cmd"
       },
-      "command": "./run_server.sh",
+      "command": "./scripts/run_server.sh",
       "problemMatcher": []
     }
   ]
