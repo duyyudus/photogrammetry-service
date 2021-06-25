@@ -34,24 +34,24 @@ def setup_logger(cfg: ModuleType):
 
 
 @dramatiq.actor
-def dng_conversion_job(task_data: dict):
-    task = Task(task_data)
-    # TODO: logic here
+def dng_conversion_job(task_data: dict, image_name: str):
+    task = Task(task_data, LOGGER)
+    task.cur_step.process_image(image_name)
 
 
 @dramatiq.actor
-def color_correction_job(task_data: dict):
-    task = Task(task_data)
-    # TODO: logic here
+def color_correction_job(task_data: dict, image_name: str):
+    task = Task(task_data, LOGGER)
+    task.cur_step.process_image(image_name)
 
 
 @dramatiq.actor
 def photo_alignment_job(task_data: dict):
-    task = Task(task_data)
-    # TODO: logic here
+    task = Task(task_data, LOGGER)
+    task.cur_step.process()
 
 
 @dramatiq.actor
 def mesh_construction_job(task_data: dict):
-    task = Task(task_data)
-    # TODO: logic here
+    task = Task(task_data, LOGGER)
+    task.cur_step.process()

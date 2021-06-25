@@ -2,8 +2,7 @@ import json
 
 from flask import Flask, request
 
-from .db import DB
-from .task import TASK_ID_KEY, TASK_LOCATION_KEY, TASK_STEP_KEY, StepIndex
+from .task import TASK_ID_KEY, TASK_LOCATION_KEY, TASK_STEP_KEY, CUR_STEP_IN_PROGRESS_KEY, StepIndex
 from .task_coordinator import Status, DatabaseAdapter
 
 
@@ -24,7 +23,7 @@ class ApiHandler(object):
                 'message': self._server.config['ABOUT'],
             }
 
-        @self._server.route('/add_task')
+        @self._server.route('/add_task', methods=['POST'])
         def add_task():
             task_location = request.args.get(TASK_LOCATION_KEY, type=str)
             self._server.logger.debug('Added task:')
@@ -35,7 +34,8 @@ class ApiHandler(object):
                 task_data = {
                     TASK_ID_KEY: new_task_id,
                     TASK_LOCATION_KEY: task_location,
-                    TASK_STEP_KEY: StepIndex.NOT_STARTED,
+                    TASK_STEP_KEY: StepIndex.NOT_STARTED.value,
+                    CUR_STEP_IN_PROGRESS_KEY: False,
                 }
 
                 status, data, message = self._db_adaptor.add_task(task_data)
@@ -53,7 +53,7 @@ class ApiHandler(object):
             task_id = request.args.get('task_id', type=int)
             self._server.logger.debug(f'Get task: {task_id}')
 
-            if task_id:
+            if task_id or task_id == 0:
                 status, task_data, message = self._db_adaptor.get_task(task_id)
             else:
                 status = Status.ERROR.value
@@ -62,7 +62,7 @@ class ApiHandler(object):
 
             return {'status': status, 'data': task_data, 'message': message}
 
-        @self._server.route('/update_task')
+        @self._server.route('/update_task', methods=['POST'])
         def update_task():
             """Update task"""
             task_data = request.args.get('task_data', type=str)
@@ -78,15 +78,15 @@ class ApiHandler(object):
 
             return {'status': status, 'data': data, 'message': message}
 
-        @self._server.route('/delete_task')
+        @self._server.route('/delete_task', methods=['POST'])
         def delete_task():
             """Delete task"""
             task_id = request.args.get('task_id', type=int)
             self._server.logger.debug(f'Delete task: {task_id}')
 
-            if task_id:
+            if task_id or task_id == 0:
                 status, data, message = self._db_adaptor.delete_task(task_id)
-            if not task_id:
+            else:
                 status = Status.ERROR.value
                 data = {}
                 message = 'Please provide task ID'
@@ -98,3 +98,19 @@ class ApiHandler(object):
             """Return a list of task IDs"""
             status, data, message = self._db_adaptor.ls_tasks()
             return {'status': status, 'data': data, 'message': message}
+
+        @self._server.route('/process_task', methods=['POST'])
+        def process_task():
+            """Force process a specific task or all tasks"""
+            task_id = request.args.get('task_id', type=int)
+            all_tasks = request.args.get('all_tasks', type=bool, default=False)
+            self._server.logger.debug(f'Process task: {task_id}, all tasks: {all_tasks}')
+
+            if task_id or task_id == 0 or all_tasks:
+                status, task_data, message = self._db_adaptor.process_task(task_id, all_tasks)
+            else:
+                status = Status.ERROR.value
+                task_data = {}
+                message = 'Please provide task ID'
+
+            return {'status': status, 'data': task_data, 'message': message}

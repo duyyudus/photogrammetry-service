@@ -10,4 +10,4 @@ cfg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cfg)
 
 coordinator = Coordinator(cfg)
-coordinator.run()
+coordinator.run(2)

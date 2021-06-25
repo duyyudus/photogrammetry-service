@@ -1,13 +1,18 @@
 import re
+import shutil
 from abc import ABC, abstractmethod
 from enum import Enum
+from logging import Logger
 from pathlib import Path
 from typing import Any, List, Optional, Pattern, Tuple, Union
+
+from . import ext_tool_adaptor as ext_tool
 
 LATEST_TASK_ID_KEY = 'latest_task_id'
 TASK_ID_KEY = 'task_id'
 TASK_STEP_KEY = 'step'
 TASK_LOCATION_KEY = 'task_location'
+CUR_STEP_IN_PROGRESS_KEY = 'cur_step_in_progress'
 
 
 class StepIndex(Enum):
@@ -87,8 +92,16 @@ class Step(ABC):
         return self._step_id
 
     @property
+    def task(self) -> 'Task':
+        return self._task
+
+    @property
     def task_location(self) -> Path:
         return self._task.task_location
+
+    @property
+    def logger(self) -> Logger:
+        return self._task.logger
 
     @property
     def input_dir(self) -> Optional[Path]:
@@ -159,21 +172,21 @@ class Step(ABC):
         return
 
     @abstractmethod
-    def _process_image(self, input_image: Path, output_image: Path):
+    def _process_image(self, input_image: Path, output_image: Path) -> bool:
         """Process a single atomic element (e.g. individual images) of this `Step`
 
         Apply for `Step`s that output multiple images
         """
-        pass
+        return
 
-    def process_image(self, image_name: str):
+    def process_image(self, image_name: str) -> bool:
         """Wrap `self._process_image()` with interpreted
         input and output image path from `image_name`
 
         For instance, if full image file name is `IMG01234.ARW`, then `image_name` is `IMG01234`
         """
 
-        if not self.input_dir:
+        if not (self.input_dir and self.output_dir):
             return
 
         in_img_path = self.input_dir.joinpath(
@@ -185,52 +198,188 @@ class Step(ABC):
         return self._process_image(in_img_path, out_img_path)
 
     @abstractmethod
-    def _process(self):
+    def _process(self) -> bool:
         """Process this `Step` as a whole
 
         Apply for `Step`s that does not output multiple images
         """
-        pass
+        return
 
-    def process(self):
+    def process(self) -> bool:
         """Wraps `self._process()`"""
-        pass
+
+        return self._process()
 
 
-# TODO: implement different types of Step here
+##########################################################################################
+###############################################################################
+
+# TODO WIP: implement different types of Step here
+
+
+class NotStartedStep(Step):
+    def __init__(self, *args):
+        super(NotStartedStep, self).__init__(*args)
+
+    @property
+    def is_finished(self) -> bool:
+        return True
+
+    def _process_image(self, input_image: Path, output_image: Path) -> bool:
+        return
+
+    def _process(self) -> bool:
+        return
+
+
+class DngConversionStep(Step):
+    def __init__(self, *args):
+        super(DngConversionStep, self).__init__(*args)
+
+    @property
+    def is_finished(self) -> bool:
+        return len(self.ls_input_images()) == len(self.ls_output_images())
+
+    def _process_image(self, input_image: Path, output_image: Path) -> bool:
+        succeed = 1
+        try:
+            output_image.parent.mkdir(exist_ok=1)
+            shutil.copyfile(input_image, output_image)
+            self.logger.debug(f'Converted to DNG: {output_image}')
+        except Exception as e:
+            self.logger.error(f'DNG conversion error: {input_image} :: {str(e)}')
+            succeed = 0
+        return succeed
+
+    def _process(self) -> bool:
+        return
+
+
+class ColorCorrectionStep(Step):
+    def __init__(self, *args):
+        super(ColorCorrectionStep, self).__init__(*args)
+
+    @property
+    def is_finished(self) -> bool:
+        return len(self.ls_input_images()) == len(self.ls_output_images())
+
+    def _process_image(self, input_image: Path, output_image: Path) -> bool:
+        succeed = 1
+        try:
+            output_image.parent.mkdir(exist_ok=1)
+            shutil.copyfile(input_image, output_image)
+            self.logger.debug(f'Color corrected: {output_image}')
+        except Exception as e:
+            self.logger.error(f'Color correction error: {input_image} :: {str(e)}')
+            succeed = 0
+        return succeed
+
+    def _process(self) -> bool:
+        return
+
+
+class PhotoAlignmentStep(Step):
+    def __init__(self, *args):
+        super(PhotoAlignmentStep, self).__init__(*args)
+
+    @property
+    def dummy_file(self) -> Path:
+        return self.output_dir.joinpath('PHOTO_ALIGNMENT_DUMMY')
+
+    @property
+    def is_finished(self) -> bool:
+        return self.dummy_file.exists()
+
+    def _process_image(self, input_image: Path, output_image: Path) -> bool:
+        return
+
+    def _process(self) -> bool:
+        succeed = 1
+        try:
+            ext_tool.run_photo_alignment(self.input_dir, self.output_dir, self.dummy_file)
+            self.logger.debug(f'Finished photo alignment: {self.output_dir}')
+        except Exception as e:
+            self.logger.error(f'Photo alignment error :: {str(e)}')
+            succeed = 0
+        return succeed
+
+
+class MeshConstructionStep(Step):
+    def __init__(self, *args):
+        super(MeshConstructionStep, self).__init__(*args)
+
+    @property
+    def dummy_file(self) -> Path:
+        return self.output_dir.joinpath('MESH_CONSTRUCTION_DUMMY')
+
+    @property
+    def is_finished(self) -> bool:
+        return self.dummy_file.exists()
+
+    def _process_image(self, input_image: Path, output_image: Path) -> bool:
+        return
+
+    def _process(self) -> bool:
+        succeed = 1
+        try:
+            ext_tool.run_mesh_construction(self.input_dir, self.output_dir, self.dummy_file)
+            self.logger.debug(f'Finished mesh construction: {self.output_dir}')
+        except Exception as e:
+            self.logger.error(f'Mesh construction error :: {str(e)}')
+            succeed = 0
+        return succeed
+
+
+class CompletedStep(Step):
+    def __init__(self, *args):
+        super(CompletedStep, self).__init__(*args)
+
+    @property
+    def is_finished(self) -> bool:
+        return True
+
+    def _process_image(self, input_image: Path, output_image: Path) -> bool:
+        return
+
+    def _process(self) -> bool:
+        return
+
+
+###############################################################################
+##########################################################################################
+
+STEP_CLASS_MAP = {
+    StepIndex.NOT_STARTED.value: NotStartedStep,
+    StepIndex.DNG_CONVERSION.value: DngConversionStep,
+    StepIndex.COLOR_CORRECTION.value: ColorCorrectionStep,
+    StepIndex.PHOTO_ALIGNMENT.value: PhotoAlignmentStep,
+    StepIndex.MESH_CONSTRUCTION.value: MeshConstructionStep,
+    StepIndex.COMPLETED.value: CompletedStep,
+}
 
 
 class Task(object):
-    """A photogrammetry task.
+    """A photogrammetry task."""
 
-    `self._task_data` format::
+    def __init__(self, task_data: dict, logger: Logger):
+        super(Task, self).__init__()
+        self._task_data = task_data
+        self._logger = logger
 
+    @property
+    def logger(self) -> Logger:
+        return self._logger
+
+    @property
+    def task_data(self) -> dict:
+        """
         {
             "task_id": int,
             "task_location": str, # E.g. "/path/to/some/folder"
             "step": int,
+            "cur_step_pending": bool,
         }
-
-    """
-
-    def __init__(self, task_data: dict):
-        super(Task, self).__init__()
-        self._task_data = task_data
-        self._cur_step_id = 0
-
-        self.sync_cur_step()
-
-        self._steps = {
-            StepIndex.NOT_STARTED.value: Step(StepIndex.NOT_STARTED.value, self),
-            StepIndex.DNG_CONVERSION.value: Step(StepIndex.DNG_CONVERSION.value, self),
-            StepIndex.COLOR_CORRECTION.value: Step(StepIndex.COLOR_CORRECTION.value, self),
-            StepIndex.PHOTO_ALIGNMENT.value: Step(StepIndex.PHOTO_ALIGNMENT.value, self),
-            StepIndex.MESH_CONSTRUCTION.value: Step(StepIndex.MESH_CONSTRUCTION.value, self),
-            StepIndex.COMPLETED.value: Step(StepIndex.COMPLETED.value, self),
-        }
-
-    @property
-    def task_data(self) -> dict:
+        """
         return self._task_data
 
     @property
@@ -240,13 +389,5 @@ class Task(object):
     @property
     def cur_step(self) -> Step:
         """The current step."""
-        return self._steps[self._cur_step_id]
-
-    def sync_cur_step(self):
-        """Scan task location and update current step ID value."""
-
-        for step_id in sorted(STEP_METADATA.keys()):
-            if self.task_location.joinpath(STEP_METADATA[step_id]['output_folder']).exists():
-                self._cur_step_id += 1
-            else:
-                break
+        step_id = self._task_data[TASK_STEP_KEY]
+        return STEP_CLASS_MAP[step_id](step_id, self)

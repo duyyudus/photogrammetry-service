@@ -1,14 +1,14 @@
+import logging
+import pprint
 import time
 from enum import Enum
-import logging
 from logging.config import dictConfig
 from types import ModuleType
 from typing import Any, Tuple
 
-from flask import Flask
-
+from . import worker
 from .db import DB
-from .task import TASK_ID_KEY
+from .task import CUR_STEP_IN_PROGRESS_KEY, TASK_ID_KEY, TASK_STEP_KEY, StepIndex, Task
 
 
 class Status(Enum):
@@ -24,14 +24,9 @@ class DatabaseAdapter(object):
 
     """
 
-    def __init__(self, server: Flask, db: DB):
+    def __init__(self, db: DB):
         super(DatabaseAdapter, self).__init__()
-        self._server = server
         self._db = db
-        self._tasks = []
-
-    def _sync_task(self):
-        status, self._tasks, message = self.ls_tasks()
 
     def get_latest_task_id(self) -> int:
         return self._db.get_latest_task_id()
@@ -90,13 +85,39 @@ class DatabaseAdapter(object):
             status = Status.ERROR.value
         return status, tasks, message
 
+    def process_task(self, task_id: int, all_tasks: bool = False) -> Tuple[Status, None, str]:
+        """Update DB to trigger tasks processing"""
+
+        message = 'Requested to process task'
+        status = Status.SUCCESS.value
+
+        try:
+            if all_tasks:
+                tasks = self._db.ls_tasks()
+            else:
+                tasks = [self._db.get_task(task_id)]
+
+            for task_data in tasks:
+                task_data[TASK_STEP_KEY] = StepIndex.DNG_CONVERSION.value
+                task_data[CUR_STEP_IN_PROGRESS_KEY] = False
+                self._db.update_task(task_data)
+        except Exception as e:
+            message = str(e)
+            status = Status.ERROR.value
+        return status, None, message
+
 
 class Coordinator(object):
-    """Task coordinator."""
+    """
+    Task coordinator.
+
+    Monitor state of all tasks in database and send processing request to `worker`
+    """
 
     def __init__(self, cfg: ModuleType):
         super(Coordinator, self).__init__()
         self._mongo_uri = cfg.MONGO_URI
+        self._db = DB(self._mongo_uri)
         self.setup_logger(cfg)
 
     def setup_logger(self, cfg: ModuleType):
@@ -130,7 +151,67 @@ class Coordinator(object):
         )
         self.logger = logging.getLogger()
 
-    def run(self):
-        self.logger.info('Running Task Coordinator...')
+    def run(self, interval: float):
+        """
+        Coordinating loop:
+            - Get list of tasks from DB
+            - For current step of each task
+                * If step is in progress, do further check
+                    - If finished, update task data to DB ( new current step value, no longer in progress )
+                    - Otherwise, skip
+                * If step is NOT in progress
+                    - Request `worker` to process it
+                    - And update task data in DB ( mark as in progress )
+        """
+        self.logger.info('Running Task Coordinator...\n')
         while 1:
-            time.sleep(2)
+            self.logger.debug('START coordinating tasks:')
+            tasks = self._db.ls_tasks()
+            self.logger.debug(pprint.pformat(tasks))
+
+            for task_data in tasks:
+                task = Task(task_data, self.logger)
+                task_id = task_data[TASK_ID_KEY]
+                if task_data[CUR_STEP_IN_PROGRESS_KEY]:
+                    if task.cur_step.is_finished:
+                        task_data[CUR_STEP_IN_PROGRESS_KEY] = False
+                        task_data[TASK_STEP_KEY] += 1
+                        self._db.update_task(task_data)
+                else:
+                    sent_job = 0
+                    if task.cur_step.step_id == StepIndex.NOT_STARTED.value:
+                        sent_job = 1
+                    elif task.cur_step.step_id == StepIndex.DNG_CONVERSION.value:
+                        for image_name in task.cur_step.ls_input_images():
+                            worker.dng_conversion_job.send(task_data, image_name)
+                            sent_job = 1
+                            self.logger.debug(
+                                f'Sent dng_conversion_job, task: {task_id}, image: {image_name}'
+                            )
+                    elif task.cur_step.step_id == StepIndex.COLOR_CORRECTION.value:
+                        for image_name in task.cur_step.ls_input_images():
+                            worker.color_correction_job.send(task_data, image_name)
+                            sent_job = 1
+                            self.logger.debug(
+                                f'Sent color_correction_job, task: {task_id}, image: {image_name}'
+                            )
+                    elif task.cur_step.step_id == StepIndex.PHOTO_ALIGNMENT.value:
+                        worker.photo_alignment_job.send(task_data)
+                        sent_job = 1
+                        self.logger.debug(f'Sent photo_alignment_job, task: {task_id}')
+                    elif task.cur_step.step_id == StepIndex.MESH_CONSTRUCTION.value:
+                        worker.mesh_construction_job.send(task_data)
+                        sent_job = 1
+                        self.logger.debug(f'Sent mesh_construction_job, task: {task_id}')
+
+                    if (
+                        StepIndex.NOT_STARTED.value
+                        <= task.cur_step.step_id
+                        <= StepIndex.MESH_CONSTRUCTION.value
+                    ) and sent_job:
+                        task_data[CUR_STEP_IN_PROGRESS_KEY] = True
+                        self._db.update_task(task_data)
+
+            self.logger.debug('DONE')
+            self.logger.debug('')
+            time.sleep(interval)

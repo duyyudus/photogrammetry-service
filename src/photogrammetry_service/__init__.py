@@ -60,9 +60,9 @@ def create_server(cfg: Union[str, dict]) -> Flask:
         }
     )
 
-    db = DB(server)
+    db = DB(server.config['MONGO_URI'])
 
-    db_adaptor = DatabaseAdapter(server, db)
+    db_adaptor = DatabaseAdapter(db)
 
     api_handler = ApiHandler(server, db_adaptor)
     api_handler.register_api()
