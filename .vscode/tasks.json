@@ -24,6 +24,24 @@
       },
       "command": "./scripts/run_server.sh",
       "problemMatcher": []
+    },
+    {
+      "label": "Run Worker",
+      "type": "shell",
+      "windows": {
+        "command": "./scripts/run_worker.cmd"
+      },
+      "command": "./scripts/run_worker.sh",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Coordinator",
+      "type": "shell",
+      "windows": {
+        "command": "./scripts/run_coordinator.cmd"
+      },
+      "command": "./scripts/run_coordinator.sh",
+      "problemMatcher": []
     }
   ]
 }
