@@ -33,7 +33,7 @@ def blur(src: Path, tg: Path):
     WARNING: does not work with TIFF
     """
     image = skimage.io.imread(fname=src.as_posix(), plugin='pil')
-    blurred = skimage.filters.gaussian(image, sigma=(50, 50), truncate=3.5, multichannel=True)
+    blurred = skimage.filters.gaussian(image, sigma=(10, 10), truncate=3.5, multichannel=True)
     skimage.io.imsave(tg.as_posix(), blurred)
 
 

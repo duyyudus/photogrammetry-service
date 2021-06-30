@@ -1,3 +1,4 @@
+from os import truncate
 import re
 import shutil
 import time
@@ -295,13 +296,16 @@ class DngConversionStep(Step):
 
     @property
     def is_finished(self) -> bool:
-        return len(self.ls_input_images()) == len(self.ls_output_images())
+        a = len(self.ls_input_images()) == len(self.ls_output_images())
+        b = len(self.ls_output_images()) > 0
+        return a and b
 
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         succeed = 1
         try:
-            output_image.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(input_image, output_image)
+            ext_tool.run_dng_conversion(
+                input_image, self.output_dir, Path(self.task.ext_tools['DNG_CONVERTER'])
+            )
             self.logger.debug(f'Converted to DNG: {output_image}')
         except Exception as e:
             self.logger.error(f'DNG conversion error: {input_image} :: {str(e)}')
@@ -318,7 +322,9 @@ class ColorCorrectionStep(Step):
 
     @property
     def is_finished(self) -> bool:
-        return len(self.ls_input_images()) == len(self.ls_output_images())
+        a = len(self.ls_input_images()) == len(self.ls_output_images())
+        b = len(self.ls_output_images()) > 0
+        return a and b
 
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         succeed = 1
@@ -353,7 +359,12 @@ class PhotoAlignmentStep(Step):
     def _process(self) -> bool:
         succeed = 1
         try:
-            ext_tool.run_photo_alignment(self.input_dir, self.output_dir, self.dummy_file)
+            ext_tool.run_photo_alignment(
+                self.input_dir,
+                self.output_dir,
+                self.dummy_file,
+                ext_tool_exe=self.task.ext_tools['REALITY_CAPTURE'],
+            )
             self.logger.debug(f'Finished photo alignment: {self.output_dir}')
         except Exception as e:
             self.logger.error(f'Photo alignment error :: {str(e)}')
@@ -379,7 +390,12 @@ class MeshConstructionStep(Step):
     def _process(self) -> bool:
         succeed = 1
         try:
-            ext_tool.run_mesh_construction(self.input_dir, self.output_dir, self.dummy_file)
+            ext_tool.run_mesh_construction(
+                self.input_dir,
+                self.output_dir,
+                self.dummy_file,
+                ext_tool_exe=self.task.ext_tools['REALITY_CAPTURE'],
+            )
             self.logger.debug(f'Finished mesh construction: {self.output_dir}')
         except Exception as e:
             self.logger.error(f'Mesh construction error :: {str(e)}')
