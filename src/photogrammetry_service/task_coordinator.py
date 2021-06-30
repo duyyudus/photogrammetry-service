@@ -98,7 +98,7 @@ class DatabaseAdapter(object):
                 tasks = [self._db.get_task(task_id)]
 
             for task_data in tasks:
-                task_data[TASK_STEP_KEY] = StepIndex.DNG_CONVERSION.value
+                task_data[TASK_STEP_KEY] = StepIndex.NOT_STARTED.value
                 task_data[CUR_STEP_IN_PROGRESS_KEY] = False
                 self._db.update_task(task_data)
         except Exception as e:
@@ -118,6 +118,8 @@ class Coordinator(object):
         super(Coordinator, self).__init__()
         self._mongo_uri = cfg.MONGO_URI
         self._db = DB(self._mongo_uri)
+        self._ext_tools: dict = cfg.EXT_TOOLS
+        self._template_files: dict = cfg.TEMPLATE_FILES
         self.setup_logger(cfg)
 
     def setup_logger(self, cfg: ModuleType):
@@ -170,7 +172,7 @@ class Coordinator(object):
             self.logger.debug(pprint.pformat(tasks))
 
             for task_data in tasks:
-                task = Task(task_data, self.logger)
+                task = Task(task_data, self.logger, self._ext_tools, self._template_files)
                 task_id = task_data[TASK_ID_KEY]
                 if task_data[CUR_STEP_IN_PROGRESS_KEY]:
                     if task.cur_step.is_finished:
@@ -180,7 +182,9 @@ class Coordinator(object):
                 else:
                     sent_job = 0
                     if task.cur_step.step_id == StepIndex.NOT_STARTED.value:
+                        worker.init_task_job.send(task_data)
                         sent_job = 1
+                        self.logger.debug(f'Sent init_task_job, task: {task_id}')
                     elif task.cur_step.step_id == StepIndex.DNG_CONVERSION.value:
                         for image_name in task.cur_step.ls_input_images():
                             worker.dng_conversion_job.send(task_data, image_name)

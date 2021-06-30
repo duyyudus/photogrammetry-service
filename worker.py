@@ -6,7 +6,7 @@ from photogrammetry_service.worker import (
     dng_conversion_job,
     mesh_construction_job,
     photo_alignment_job,
-    setup_logger,
+    setup_worker,
 )
 
 spec = importlib.util.spec_from_file_location(
@@ -15,4 +15,4 @@ spec = importlib.util.spec_from_file_location(
 cfg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cfg)
 
-setup_logger(cfg)
+setup_worker(cfg)

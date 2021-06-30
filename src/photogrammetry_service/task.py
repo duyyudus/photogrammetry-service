@@ -1,5 +1,6 @@
 import re
 import shutil
+import time
 from abc import ABC, abstractmethod
 from enum import Enum
 from logging import Logger
@@ -7,6 +8,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Pattern, Tuple, Union
 
 from . import ext_tool_adaptor as ext_tool
+from . import img_util
 
 LATEST_TASK_ID_KEY = 'latest_task_id'
 TASK_ID_KEY = 'task_id'
@@ -25,6 +27,7 @@ class StepIndex(Enum):
 
 
 class TaskResource(Enum):
+    CACHE = 'cache'
     RAW = '1_RAW'
     DNG = '2_DNG'
     COLOR_CORRECTED = '3_COLOR_CORRECTED'
@@ -223,13 +226,67 @@ class NotStartedStep(Step):
 
     @property
     def is_finished(self) -> bool:
-        return True
+        black = self.task.cache_dir.joinpath('black.dng')
+        cc_blur = self.task.cache_dir.joinpath('color_checker_blur.tiff')
+        return black.exists() and cc_blur.exists()
 
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         return
 
     def _process(self) -> bool:
-        return
+        """Create initial cache files"""
+        succeed = 1
+        done = 0
+        try:
+            while not done:
+                time.sleep(2)
+
+                # Copy black image from template to cache folder
+                src_black = Path(self.task.template_files['BLACK'])
+                tg_black = self.task.cache_dir.joinpath('black.dng')
+                if src_black.exists() and not tg_black.exists():
+                    tg_black.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(src_black, tg_black)
+                    self.logger.info(f'Cloned black image: {tg_black}')
+
+                # Convert user's color checker raw image to dng
+                raw_cc = self.task.cache_dir.joinpath('color_checker.ARW')
+                if raw_cc.exists():
+                    ext_tool.run_dng_conversion(
+                        raw_cc, self.task.cache_dir, Path(self.task.ext_tools['DNG_CONVERTER'])
+                    )
+                    self.logger.info(f'Converted {raw_cc.name} to DNG')
+                else:
+                    self.logger.warning(
+                        f'{raw_cc.name} not found, please put it in {self.task.cache_dir}'
+                    )
+                    continue
+
+                # Blur color checker and save as tiff
+                dng_cc = self.task.cache_dir.joinpath('color_checker.dng')
+                png_cc = self.task.cache_dir.joinpath('color_checker.png')
+                png_cc_blur = self.task.cache_dir.joinpath('color_checker_blur.png')
+                tif_cc_blur = self.task.cache_dir.joinpath('color_checker_blur.tiff')
+                if dng_cc.exists():
+                    img_util.dng_to_png(dng_cc, png_cc)
+                    self.logger.info(f'Converted {dng_cc.name} to PNG')
+
+                    img_util.blur(png_cc, png_cc_blur)
+                    self.logger.info(f'Generated blur {png_cc_blur.name} from {png_cc.name}')
+
+                    img_util.png_to_tif(png_cc_blur, tif_cc_blur)
+                    self.logger.info(f'Converted {png_cc_blur.name} to TIFF')
+
+                    done = 1
+                    self.logger.info(f'Finished blurring process: {tif_cc_blur}')
+                else:
+                    self.logger.warning(f'{dng_cc.name} not found, failed to do blurring')
+                    continue
+
+        except Exception as e:
+            self.logger.error(f'Init task error :: {str(e)}')
+            succeed = 0
+        return succeed
 
 
 class DngConversionStep(Step):
@@ -243,7 +300,7 @@ class DngConversionStep(Step):
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         succeed = 1
         try:
-            output_image.parent.mkdir(exist_ok=1)
+            output_image.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(input_image, output_image)
             self.logger.debug(f'Converted to DNG: {output_image}')
         except Exception as e:
@@ -266,7 +323,7 @@ class ColorCorrectionStep(Step):
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         succeed = 1
         try:
-            output_image.parent.mkdir(exist_ok=1)
+            output_image.parent.mkdir(parents=True, exist_ok=1)
             shutil.copyfile(input_image, output_image)
             self.logger.debug(f'Color corrected: {output_image}')
         except Exception as e:
@@ -361,14 +418,24 @@ STEP_CLASS_MAP = {
 class Task(object):
     """A photogrammetry task."""
 
-    def __init__(self, task_data: dict, logger: Logger):
+    def __init__(self, task_data: dict, logger: Logger, ext_tools: dict, template_files: dict):
         super(Task, self).__init__()
         self._task_data = task_data
         self._logger = logger
+        self._ext_tools = ext_tools
+        self._template_files = template_files
 
     @property
     def logger(self) -> Logger:
         return self._logger
+
+    @property
+    def ext_tools(self) -> dict:
+        return self._ext_tools
+
+    @property
+    def template_files(self) -> dict:
+        return self._template_files
 
     @property
     def task_data(self) -> dict:
@@ -385,6 +452,10 @@ class Task(object):
     @property
     def task_location(self) -> Path:
         return Path(self._task_data[TASK_LOCATION_KEY])
+
+    @property
+    def cache_dir(self) -> Path:
+        return self.task_location.joinpath(TaskResource.CACHE.value)
 
     @property
     def cur_step(self) -> Step:
