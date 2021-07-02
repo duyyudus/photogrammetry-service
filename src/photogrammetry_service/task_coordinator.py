@@ -6,9 +6,19 @@ from logging.config import dictConfig
 from types import ModuleType
 from typing import Any, Tuple
 
+from photogrammetry_service import img_util
+
 from . import worker
 from .db import DB
-from .task import CUR_STEP_IN_PROGRESS_KEY, TASK_ID_KEY, TASK_STEP_KEY, StepIndex, Task
+from .task import (
+    CUR_STEP_IN_PROGRESS_KEY,
+    TASK_ID_KEY,
+    TASK_STEP_KEY,
+    CC_BLUR_TIFF,
+    STEP_METADATA,
+    StepIndex,
+    Task,
+)
 
 
 class Status(Enum):
@@ -166,47 +176,79 @@ class Coordinator(object):
                     - And update task data in DB ( mark as in progress )
         """
         self.logger.info('Running Task Coordinator...\n')
+
+        color_swatch_cache = {}
         while 1:
-            self.logger.debug('START coordinating tasks:')
+            self.logger.info('START coordinating tasks:')
             tasks = self._db.ls_tasks()
             self.logger.debug(pprint.pformat(tasks))
 
             for task_data in tasks:
                 task = Task(task_data, self.logger, self._ext_tools, self._template_files)
                 task_id = task_data[TASK_ID_KEY]
+
+                if task.cur_step.step_id == StepIndex.COMPLETED.value:
+                    continue
+
                 if task_data[CUR_STEP_IN_PROGRESS_KEY]:
                     if task.cur_step.is_finished:
                         task_data[CUR_STEP_IN_PROGRESS_KEY] = False
-                        task_data[TASK_STEP_KEY] += 1
+                        if task.cur_step.step_id < StepIndex.COMPLETED.value:
+                            task_data[TASK_STEP_KEY] += 1
                         self._db.update_task(task_data)
+                        self.logger.info(
+                            f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished, moving to next step..'
+                        )
                 else:
                     sent_job = 0
-                    if task.cur_step.step_id == StepIndex.NOT_STARTED.value:
+
+                    if task.cur_step.is_finished:
+                        if task.cur_step.step_id < StepIndex.COMPLETED.value:
+                            task_data[TASK_STEP_KEY] += 1
+                        self._db.update_task(task_data)
+                        self.logger.info(
+                            f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished, moving to next step..'
+                        )
+
+                    elif task.cur_step.step_id == StepIndex.NOT_STARTED.value:
                         worker.init_task_job.send(task_data)
                         sent_job = 1
-                        self.logger.debug(f'Sent init_task_job, task: {task_id}')
+                        self.logger.info(f'Sent init_task_job, task: {task_id}')
+
                     elif task.cur_step.step_id == StepIndex.DNG_CONVERSION.value:
                         for image_name in task.cur_step.ls_input_images():
                             worker.dng_conversion_job.send(task_data, image_name)
                             sent_job = 1
-                            self.logger.debug(
+                            self.logger.info(
                                 f'Sent dng_conversion_job, task: {task_id}, image: {image_name}'
                             )
+
                     elif task.cur_step.step_id == StepIndex.COLOR_CORRECTION.value:
-                        for image_name in task.cur_step.ls_input_images():
-                            worker.color_correction_job.send(task_data, image_name)
-                            sent_job = 1
-                            self.logger.debug(
-                                f'Sent color_correction_job, task: {task_id}, image: {image_name}'
-                            )
+                        # if task.cur_step.step_id not in color_swatch_cache:
+                        #     swatch = img_util.compute_swatch(task.cache_dir.joinpath(CC_BLUR_TIFF))
+                        #     color_swatch_cache[task.task_id] = swatch.tolist()
+                        # for image_name in task.cur_step.ls_input_images():
+                        #     worker.color_correction_job.send(
+                        #         task_data, image_name, color_swatch_cache[task.task_id]
+                        #     )
+                        #     sent_job = 1
+                        #     self.logger.info(
+                        #         f'Sent color_correction_job, task: {task_id}, image: {image_name}'
+                        #     )
+
+                        worker.color_correction_single_job.send(task_data)
+                        sent_job = 1
+                        self.logger.info(f'Sent color_correction_single_job, task: {task_id}')
+
                     elif task.cur_step.step_id == StepIndex.PHOTO_ALIGNMENT.value:
                         worker.photo_alignment_job.send(task_data)
                         sent_job = 1
-                        self.logger.debug(f'Sent photo_alignment_job, task: {task_id}')
+                        self.logger.info(f'Sent photo_alignment_job, task: {task_id}')
+
                     elif task.cur_step.step_id == StepIndex.MESH_CONSTRUCTION.value:
                         worker.mesh_construction_job.send(task_data)
                         sent_job = 1
-                        self.logger.debug(f'Sent mesh_construction_job, task: {task_id}')
+                        self.logger.info(f'Sent mesh_construction_job, task: {task_id}')
 
                     if (
                         StepIndex.NOT_STARTED.value
@@ -216,6 +258,12 @@ class Coordinator(object):
                         task_data[CUR_STEP_IN_PROGRESS_KEY] = True
                         self._db.update_task(task_data)
 
-            self.logger.debug('DONE')
-            self.logger.debug('')
+                    if (
+                        task.cur_step.step_id > StepIndex.COLOR_CORRECTION.value
+                        and task.task_id in color_swatch_cache
+                    ):
+                        color_swatch_cache.pop(task.task_id)
+
+            self.logger.info('DONE')
+            self.logger.info('')
             time.sleep(interval)

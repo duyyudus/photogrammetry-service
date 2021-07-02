@@ -1,12 +1,14 @@
-from os import truncate
 import re
 import shutil
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
 from logging import Logger
+from os import truncate
 from pathlib import Path
 from typing import Any, List, Optional, Pattern, Tuple, Union
+
+from .img_util import ColourCheckerSwatchesData
 
 from . import ext_tool_adaptor as ext_tool
 from . import img_util
@@ -16,6 +18,13 @@ TASK_ID_KEY = 'task_id'
 TASK_STEP_KEY = 'step'
 TASK_LOCATION_KEY = 'task_location'
 CUR_STEP_IN_PROGRESS_KEY = 'cur_step_in_progress'
+
+BLACK_DNG = 'black.dng'
+CC_BLUR_TIFF = 'color_checker_blur.tiff'
+CC_ARW = 'color_checker.ARW'
+CC_DNG = 'color_checker.dng'
+CC_PNG = 'color_checker.png'
+CC_BLUR_PNG = 'color_checker_blur.png'
 
 
 class StepIndex(Enum):
@@ -176,14 +185,14 @@ class Step(ABC):
         return
 
     @abstractmethod
-    def _process_image(self, input_image: Path, output_image: Path) -> bool:
+    def _process_image(self, input_image: Path, output_image: Path, *args) -> bool:
         """Process a single atomic element (e.g. individual images) of this `Step`
 
         Apply for `Step`s that output multiple images
         """
         return
 
-    def process_image(self, image_name: str) -> bool:
+    def process_image(self, image_name: str, *args) -> bool:
         """Wrap `self._process_image()` with interpreted
         input and output image path from `image_name`
 
@@ -199,7 +208,7 @@ class Step(ABC):
         out_img_path = self.output_dir.joinpath(
             self.full_image_file_name(image_name, STEP_METADATA[self.step_id]['output_image_ext'])
         )
-        return self._process_image(in_img_path, out_img_path)
+        return self._process_image(in_img_path, out_img_path, *args)
 
     @abstractmethod
     def _process(self) -> bool:
@@ -227,9 +236,8 @@ class NotStartedStep(Step):
 
     @property
     def is_finished(self) -> bool:
-        black = self.task.cache_dir.joinpath('black.dng')
-        cc_blur = self.task.cache_dir.joinpath('color_checker_blur.tiff')
-        return black.exists() and cc_blur.exists()
+        cc_blur = self.task.cache_dir.joinpath(CC_BLUR_TIFF)
+        return cc_blur.exists()
 
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         return
@@ -244,14 +252,14 @@ class NotStartedStep(Step):
 
                 # Copy black image from template to cache folder
                 src_black = Path(self.task.template_files['BLACK'])
-                tg_black = self.task.cache_dir.joinpath('black.dng')
+                tg_black = self.task.cache_dir.joinpath(BLACK_DNG)
                 if src_black.exists() and not tg_black.exists():
                     tg_black.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(src_black, tg_black)
                     self.logger.info(f'Cloned black image: {tg_black}')
 
                 # Convert user's color checker raw image to dng
-                raw_cc = self.task.cache_dir.joinpath('color_checker.ARW')
+                raw_cc = self.task.cache_dir.joinpath(CC_ARW)
                 if raw_cc.exists():
                     ext_tool.run_dng_conversion(
                         raw_cc, self.task.cache_dir, Path(self.task.ext_tools['DNG_CONVERTER'])
@@ -264,10 +272,10 @@ class NotStartedStep(Step):
                     continue
 
                 # Blur color checker and save as tiff
-                dng_cc = self.task.cache_dir.joinpath('color_checker.dng')
-                png_cc = self.task.cache_dir.joinpath('color_checker.png')
-                png_cc_blur = self.task.cache_dir.joinpath('color_checker_blur.png')
-                tif_cc_blur = self.task.cache_dir.joinpath('color_checker_blur.tiff')
+                dng_cc = self.task.cache_dir.joinpath(CC_DNG)
+                png_cc = self.task.cache_dir.joinpath(CC_PNG)
+                png_cc_blur = self.task.cache_dir.joinpath(CC_BLUR_PNG)
+                tif_cc_blur = self.task.cache_dir.joinpath(CC_BLUR_TIFF)
                 if dng_cc.exists():
                     img_util.dng_to_png(dng_cc, png_cc)
                     self.logger.info(f'Converted {dng_cc.name} to PNG')
@@ -306,7 +314,7 @@ class DngConversionStep(Step):
             ext_tool.run_dng_conversion(
                 input_image, self.output_dir, Path(self.task.ext_tools['DNG_CONVERTER'])
             )
-            self.logger.debug(f'Converted to DNG: {output_image}')
+            self.logger.info(f'Converted to DNG: {output_image}')
         except Exception as e:
             self.logger.error(f'DNG conversion error: {input_image} :: {str(e)}')
             succeed = 0
@@ -326,19 +334,32 @@ class ColorCorrectionStep(Step):
         b = len(self.ls_output_images()) > 0
         return a and b
 
-    def _process_image(self, input_image: Path, output_image: Path) -> bool:
+    def _process_image(
+        self, input_image: Path, output_image: Path, swatch: ColourCheckerSwatchesData
+    ) -> bool:
         succeed = 1
         try:
-            output_image.parent.mkdir(parents=True, exist_ok=1)
-            shutil.copyfile(input_image, output_image)
-            self.logger.debug(f'Color corrected: {output_image}')
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            img_util.color_correct(input_image, output_image, swatch, self.task.cache_dir)
+            self.logger.info(f'Color corrected: {output_image}')
         except Exception as e:
             self.logger.error(f'Color correction error: {input_image} :: {str(e)}')
             succeed = 0
         return succeed
 
     def _process(self) -> bool:
-        return
+        succeed = 1
+        try:
+            swatch = img_util.compute_swatch(self.task.cache_dir.joinpath(CC_BLUR_TIFF))
+            for image_name in sorted(self.ls_input_images()):
+                try:
+                    self.process_image(image_name, swatch)
+                except Exception as e:
+                    self.logger.error(f'Color correction error: {image_name} :: {str(e)}')
+        except Exception as e:
+            self.logger.error(f'Color correction error :: {str(e)}')
+            succeed = 0
+        return succeed
 
 
 class PhotoAlignmentStep(Step):
@@ -365,7 +386,7 @@ class PhotoAlignmentStep(Step):
                 self.dummy_file,
                 ext_tool_exe=self.task.ext_tools['REALITY_CAPTURE'],
             )
-            self.logger.debug(f'Finished photo alignment: {self.output_dir}')
+            self.logger.info(f'Finished photo alignment: {self.output_dir}')
         except Exception as e:
             self.logger.error(f'Photo alignment error :: {str(e)}')
             succeed = 0
@@ -396,7 +417,7 @@ class MeshConstructionStep(Step):
                 self.dummy_file,
                 ext_tool_exe=self.task.ext_tools['REALITY_CAPTURE'],
             )
-            self.logger.debug(f'Finished mesh construction: {self.output_dir}')
+            self.logger.info(f'Finished mesh construction: {self.output_dir}')
         except Exception as e:
             self.logger.error(f'Mesh construction error :: {str(e)}')
             succeed = 0
@@ -464,6 +485,10 @@ class Task(object):
         }
         """
         return self._task_data
+
+    @property
+    def task_id(self) -> int:
+        return self._task_data[TASK_ID_KEY]
 
     @property
     def task_location(self) -> Path:

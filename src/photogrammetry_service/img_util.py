@@ -2,7 +2,8 @@
 Image processing utilities
 """
 
-from os import path
+from functools import cache
+import os
 from pathlib import Path
 
 import colour
@@ -11,7 +12,7 @@ import rawpy
 import skimage
 from colour_checker_detection import detect_colour_checkers_segmentation
 from colour_checker_detection.detection.segmentation import ColourCheckerSwatchesData
-# from OpenImageIO import ImageInput, ImageOutput
+
 from PIL import Image
 from skimage import data, filters, io
 
@@ -109,21 +110,30 @@ def compute_swatch(color_checker: Path) -> ColourCheckerSwatchesData:
     return swatch
 
 
-def color_correct(src: Path, tg: Path, swatch: ColourCheckerSwatchesData):
+def color_correct(src: Path, tg: Path, swatch: ColourCheckerSwatchesData, cache_dir: Path = None):
     """
     Args:
         src (Path): DNG image
         tg (Path): JPG image
     """
 
-    tmp_tif = src.parent.joinpath(f'{tg.stem}_tmp.tiff')
+    cache_dir = cache_dir if cache_dir else tg.parent
+
+    # Convert source image to temp TIFF
+    tmp_tif = cache_dir.joinpath(f'{tg.stem}_tmp.tiff')
     dng_to_tif(src, tmp_tif)
 
+    # Correct color of that temp TIFF
     image = colour.cctf_decoding(colour.io.read_image(tmp_tif.as_posix()))
     cc_image = colour.colour_correction(image, swatch, REF_SWATCHES, 'Finlayson 2015')
-    cc_tmp_tif = src.parent.joinpath(f'{tg.stem}_cc.tiff')
+    cc_tmp_tif = cache_dir.joinpath(f'{tg.stem}_cc.tiff')
     colour.io.write_image(colour.cctf_encoding(cc_image), cc_tmp_tif.as_posix(), bit_depth='uint8')
 
-    final_cc_jpg = src.parent.joinpath(f'{tg.stem}.jpg')
+    # Save color corrected TIFF as JPG
+    final_cc_jpg = tg.parent.joinpath(f'{tg.stem}.jpg')
     img = Image.open(cc_tmp_tif.as_posix())
-    img.save(final_cc_jpg.as_posix(), quality=100, subsampling=0)
+    img.save(final_cc_jpg.as_posix(), quality=95, subsampling=0)
+
+    # Clean tmp files
+    os.remove(tmp_tif.as_posix())
+    os.remove(cc_tmp_tif.as_posix())
