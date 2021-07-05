@@ -1,1 +1,1 @@
-venv/Scripts/dramatiq worker
+"venv/Scripts/dramatiq" worker

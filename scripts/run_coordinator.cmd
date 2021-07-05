@@ -1,1 +1,1 @@
-venv/Scripts/python coordinator.py
+"venv/Scripts/python" coordinator.py
