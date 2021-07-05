@@ -99,15 +99,15 @@ class ApiHandler(object):
             status, data, message = self._db_adaptor.ls_tasks()
             return {'status': status, 'data': data, 'message': message}
 
-        @self._server.route('/process_task', methods=['POST'])
-        def process_task():
+        @self._server.route('/restart_task', methods=['POST'])
+        def restart_task():
             """Force process a specific task or all tasks"""
             task_id = request.args.get('task_id', type=int)
             all_tasks = request.args.get('all_tasks', type=bool, default=False)
             self._server.logger.debug(f'Process task: {task_id}, all tasks: {all_tasks}')
 
             if task_id or task_id == 0 or all_tasks:
-                status, task_data, message = self._db_adaptor.process_task(task_id, all_tasks)
+                status, task_data, message = self._db_adaptor.restart_task(task_id, all_tasks)
             else:
                 status = Status.ERROR.value
                 task_data = {}

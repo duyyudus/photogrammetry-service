@@ -95,8 +95,8 @@ class DatabaseAdapter(object):
             status = Status.ERROR.value
         return status, tasks, message
 
-    def process_task(self, task_id: int, all_tasks: bool = False) -> Tuple[Status, None, str]:
-        """Update DB to trigger tasks processing"""
+    def restart_task(self, task_id: int, all_tasks: bool = False) -> Tuple[Status, None, str]:
+        """Update DB to trigger tasks re-processing"""
 
         message = 'Requested to process task'
         status = Status.SUCCESS.value
