@@ -78,7 +78,7 @@ def color_correction_single_job(task_data: dict):
 
 
 @dramatiq.actor(time_limit=48000000, max_retries=0)
-def photo_alignment_job(task_data: dict):
+def prepare_rc_job(task_data: dict):
     task = Task(task_data, LOGGER, EXT_TOOLS, TEMPLATE_FILES)
     task.cur_step.process()
 

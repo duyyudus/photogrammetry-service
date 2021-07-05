@@ -1,17 +1,16 @@
+import distutils.dir_util
 import re
 import shutil
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
 from logging import Logger
-from os import truncate
 from pathlib import Path
 from typing import Any, List, Optional, Pattern, Tuple, Union
 
-from .img_util import ColourCheckerSwatchesData
-
 from . import ext_tool_adaptor as ext_tool
 from . import img_util
+from .img_util import ColourCheckerSwatchesData
 
 LATEST_TASK_ID_KEY = 'latest_task_id'
 TASK_ID_KEY = 'task_id'
@@ -25,13 +24,14 @@ CC_ARW = 'color_checker.ARW'
 CC_DNG = 'color_checker.dng'
 CC_PNG = 'color_checker.png'
 CC_BLUR_PNG = 'color_checker_blur.png'
+RC_SETTING = 'rc_setting'
 
 
 class StepIndex(Enum):
     NOT_STARTED = 0
     DNG_CONVERSION = 1
     COLOR_CORRECTION = 2
-    PHOTO_ALIGNMENT = 3
+    PREPARE_RC = 3
     MESH_CONSTRUCTION = 4
     COMPLETED = 5
 
@@ -41,8 +41,8 @@ class TaskResource(Enum):
     RAW = '1_RAW'
     DNG = '2_DNG'
     COLOR_CORRECTED = '3_COLOR_CORRECTED'
-    MESH_CONSTRUCTION = '4_MESH_CONSTRUCTION'
-    FINAL_RESULT = '5_FINAL_RESULT'
+    PREPARE_RC = '4_PREPARE_RC'
+    MESH_CONSTRUCTION = '5_MESH_CONSTRUCTION'
 
 
 IMAGE_PATTERN = r'\w*\d*'
@@ -68,23 +68,23 @@ STEP_METADATA = {
         'output_folder': TaskResource.COLOR_CORRECTED.value,
         'output_image_ext': 'jpg',
     },
-    StepIndex.PHOTO_ALIGNMENT.value: {
-        'name': 'Photo Alignment',
+    StepIndex.PREPARE_RC.value: {
+        'name': 'Prepare RC Project',
         'input_folder': TaskResource.COLOR_CORRECTED.value,
         'input_image_ext': 'jpg',
-        'output_folder': TaskResource.MESH_CONSTRUCTION.value,
+        'output_folder': TaskResource.PREPARE_RC.value,
         'output_image_ext': None,
     },
     StepIndex.MESH_CONSTRUCTION.value: {
         'name': 'Mesh Construction',
-        'input_folder': TaskResource.MESH_CONSTRUCTION.value,
+        'input_folder': TaskResource.PREPARE_RC.value,
         'input_image_ext': None,
-        'output_folder': TaskResource.FINAL_RESULT.value,
+        'output_folder': TaskResource.MESH_CONSTRUCTION.value,
         'output_image_ext': None,
     },
     StepIndex.COMPLETED.value: {
         'name': 'Completed',
-        'input_folder': TaskResource.FINAL_RESULT.value,
+        'input_folder': TaskResource.MESH_CONSTRUCTION.value,
         'input_image_ext': None,
         'output_folder': None,
         'output_image_ext': None,
@@ -237,7 +237,8 @@ class NotStartedStep(Step):
     @property
     def is_finished(self) -> bool:
         cc_blur = self.task.cache_dir.joinpath(CC_BLUR_TIFF)
-        return cc_blur.exists()
+        rc_setting = self.task.cache_dir.joinpath(RC_SETTING)
+        return cc_blur.exists() and rc_setting.exists()
 
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         return
@@ -249,6 +250,12 @@ class NotStartedStep(Step):
         try:
             while not done:
                 time.sleep(2)
+
+                # Copy Reality Capture setting
+                src_rc = Path(self.task.template_files['RC_SETTING'])
+                tg_rc = self.task.cache_dir.joinpath(RC_SETTING)
+                if src_rc.exists() and not tg_rc.exists():
+                    distutils.dir_util.copy_tree(src_rc.as_posix(), tg_rc.as_posix())
 
                 # Copy black image from template to cache folder
                 src_black = Path(self.task.template_files['BLACK'])
@@ -362,17 +369,17 @@ class ColorCorrectionStep(Step):
         return succeed
 
 
-class PhotoAlignmentStep(Step):
+class PrepareRcStep(Step):
     def __init__(self, *args):
-        super(PhotoAlignmentStep, self).__init__(*args)
+        super(PrepareRcStep, self).__init__(*args)
 
     @property
-    def dummy_file(self) -> Path:
-        return self.output_dir.joinpath('PHOTO_ALIGNMENT_DUMMY')
+    def marker_file(self) -> Path:
+        return self.output_dir.joinpath(ext_tool.PREPARE_RC_MARKER)
 
     @property
     def is_finished(self) -> bool:
-        return self.dummy_file.exists()
+        return self.marker_file.exists()
 
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         return
@@ -380,10 +387,9 @@ class PhotoAlignmentStep(Step):
     def _process(self) -> bool:
         succeed = 1
         try:
-            ext_tool.run_photo_alignment(
+            ext_tool.run_prepare_rc(
                 self.input_dir,
                 self.output_dir,
-                self.dummy_file,
                 ext_tool_exe=self.task.ext_tools['REALITY_CAPTURE'],
             )
             self.logger.info(f'Finished photo alignment: {self.output_dir}')
@@ -398,12 +404,12 @@ class MeshConstructionStep(Step):
         super(MeshConstructionStep, self).__init__(*args)
 
     @property
-    def dummy_file(self) -> Path:
-        return self.output_dir.joinpath('MESH_CONSTRUCTION_DUMMY')
+    def marker_file(self) -> Path:
+        return self.output_dir.joinpath(ext_tool.MESH_CONSTRUCTION_MARKER)
 
     @property
     def is_finished(self) -> bool:
-        return self.dummy_file.exists()
+        return self.marker_file.exists()
 
     def _process_image(self, input_image: Path, output_image: Path) -> bool:
         return
@@ -414,8 +420,8 @@ class MeshConstructionStep(Step):
             ext_tool.run_mesh_construction(
                 self.input_dir,
                 self.output_dir,
-                self.dummy_file,
-                ext_tool_exe=self.task.ext_tools['REALITY_CAPTURE'],
+                self.task.ext_tools['REALITY_CAPTURE'],
+                self.task.cache_dir.joinpath(RC_SETTING),
             )
             self.logger.info(f'Finished mesh construction: {self.output_dir}')
         except Exception as e:
@@ -446,7 +452,7 @@ STEP_CLASS_MAP = {
     StepIndex.NOT_STARTED.value: NotStartedStep,
     StepIndex.DNG_CONVERSION.value: DngConversionStep,
     StepIndex.COLOR_CORRECTION.value: ColorCorrectionStep,
-    StepIndex.PHOTO_ALIGNMENT.value: PhotoAlignmentStep,
+    StepIndex.PREPARE_RC.value: PrepareRcStep,
     StepIndex.MESH_CONSTRUCTION.value: MeshConstructionStep,
     StepIndex.COMPLETED.value: CompletedStep,
 }

@@ -5,7 +5,7 @@ from photogrammetry_service.worker import (
     color_correction_job,
     dng_conversion_job,
     mesh_construction_job,
-    photo_alignment_job,
+    prepare_rc_job,
     setup_worker,
 )
 

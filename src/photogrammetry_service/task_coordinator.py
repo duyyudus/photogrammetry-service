@@ -179,7 +179,7 @@ class Coordinator(object):
 
         color_swatch_cache = {}
         while 1:
-            self.logger.info('START coordinating tasks:')
+            self.logger.debug('START coordinating tasks:')
             tasks = self._db.ls_tasks()
             self.logger.debug(pprint.pformat(tasks))
 
@@ -197,7 +197,7 @@ class Coordinator(object):
                             task_data[TASK_STEP_KEY] += 1
                         self._db.update_task(task_data)
                         self.logger.info(
-                            f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished, moving to next step..'
+                            f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished'
                         )
                 else:
                     sent_job = 0
@@ -207,7 +207,7 @@ class Coordinator(object):
                             task_data[TASK_STEP_KEY] += 1
                         self._db.update_task(task_data)
                         self.logger.info(
-                            f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished, moving to next step..'
+                            f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished'
                         )
 
                     elif task.cur_step.step_id == StepIndex.NOT_STARTED.value:
@@ -240,10 +240,10 @@ class Coordinator(object):
                         sent_job = 1
                         self.logger.info(f'Sent color_correction_single_job, task: {task_id}')
 
-                    elif task.cur_step.step_id == StepIndex.PHOTO_ALIGNMENT.value:
-                        worker.photo_alignment_job.send(task_data)
+                    elif task.cur_step.step_id == StepIndex.PREPARE_RC.value:
+                        worker.prepare_rc_job.send(task_data)
                         sent_job = 1
-                        self.logger.info(f'Sent photo_alignment_job, task: {task_id}')
+                        self.logger.info(f'Sent prepare_rc_job, task: {task_id}')
 
                     elif task.cur_step.step_id == StepIndex.MESH_CONSTRUCTION.value:
                         worker.mesh_construction_job.send(task_data)
@@ -264,6 +264,6 @@ class Coordinator(object):
                     ):
                         color_swatch_cache.pop(task.task_id)
 
-            self.logger.info('DONE')
-            self.logger.info('')
+            self.logger.debug('DONE')
+            self.logger.debug('')
             time.sleep(interval)
