@@ -6,16 +6,17 @@ from logging.config import dictConfig
 from types import ModuleType
 from typing import Any, Tuple
 
+from pathlib import Path
 from photogrammetry_service import img_util
 
 from . import worker
 from .db import DB
 from .task import (
+    CC_BLUR_TIFF,
     CUR_STEP_IN_PROGRESS_KEY,
+    STEP_METADATA,
     TASK_ID_KEY,
     TASK_STEP_KEY,
-    CC_BLUR_TIFF,
-    STEP_METADATA,
     StepIndex,
     Task,
 )
@@ -133,6 +134,7 @@ class Coordinator(object):
         self.setup_logger(cfg)
 
     def setup_logger(self, cfg: ModuleType):
+        Path(cfg.COORDINATOR_LOG).parent.mkdir(parents=True, exist_ok=True)
         dictConfig(
             {
                 'version': 1,

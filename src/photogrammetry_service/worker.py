@@ -1,6 +1,6 @@
 import logging
 from types import ModuleType
-
+from pathlib import Path
 import dramatiq
 from dramatiq.brokers.redis import RedisBroker
 
@@ -17,6 +17,8 @@ dramatiq.set_broker(redis_broker)
 
 def _setup_logger(cfg: ModuleType):
     global LOGGER
+
+    Path(cfg.WORKER_LOG).parent.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger('dramatiq')
     logger.setLevel(cfg.LOG_LEVEL)

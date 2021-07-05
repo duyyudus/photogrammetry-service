@@ -2,7 +2,6 @@
 Image processing utilities
 """
 
-from functools import cache
 import os
 from pathlib import Path
 
