@@ -392,9 +392,9 @@ class PrepareRcStep(Step):
                 self.output_dir,
                 ext_tool_exe=self.task.ext_tools['REALITY_CAPTURE'],
             )
-            self.logger.info(f'Finished photo alignment: {self.output_dir}')
+            self.logger.info(f'Ran RC preparation: {self.output_dir}')
         except Exception as e:
-            self.logger.error(f'Photo alignment error :: {str(e)}')
+            self.logger.error(f'RC preparation error :: {str(e)}')
             succeed = 0
         return succeed
 
@@ -423,7 +423,7 @@ class MeshConstructionStep(Step):
                 self.task.ext_tools['REALITY_CAPTURE'],
                 self.task.cache_dir.joinpath(RC_SETTING),
             )
-            self.logger.info(f'Finished mesh construction: {self.output_dir}')
+            self.logger.info(f'Ran mesh construction: {self.output_dir}')
         except Exception as e:
             self.logger.error(f'Mesh construction error :: {str(e)}')
             succeed = 0
