@@ -1,1 +1,2 @@
+title Photogrammetry Server
 scripts/run_server.cmd

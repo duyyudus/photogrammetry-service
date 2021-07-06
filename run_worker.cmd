@@ -1,1 +1,2 @@
+title Photogrammetry Worker
 scripts/run_worker.cmd

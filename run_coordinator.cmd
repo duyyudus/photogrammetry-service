@@ -1,1 +1,2 @@
+title Photogrammetry Task Coordinator
 scripts/run_coordinator.cmd
