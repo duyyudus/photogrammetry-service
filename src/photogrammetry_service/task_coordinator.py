@@ -12,8 +12,12 @@ from photogrammetry_service import img_util
 from . import worker
 from .db import DB
 from .task import (
+    CC_ARW,
     CC_BLUR_TIFF,
-    CUR_STEP_IN_PROGRESS_KEY,
+    STEP_IN_PROGRESS_KEY,
+    REQUIRE_KEY,
+    REQ_COLOR_CHECKER_KEY,
+    REQ_RAW_IMAGE_KEY,
     STEP_METADATA,
     TASK_ID_KEY,
     TASK_STEP_KEY,
@@ -110,7 +114,7 @@ class DatabaseAdapter(object):
 
             for task_data in tasks:
                 task_data[TASK_STEP_KEY] = StepIndex.NOT_STARTED.value
-                task_data[CUR_STEP_IN_PROGRESS_KEY] = False
+                task_data[STEP_IN_PROGRESS_KEY] = False
                 self._db.update_task(task_data)
         except Exception as e:
             message = str(e)
@@ -192,9 +196,19 @@ class Coordinator(object):
                 if task.cur_step.step_id == StepIndex.COMPLETED.value:
                     continue
 
-                if task_data[CUR_STEP_IN_PROGRESS_KEY]:
+                if task.cur_step.step_id == StepIndex.NOT_STARTED.value:
+                    if task.cache_dir.joinpath(CC_ARW).exists():
+                        task_data[REQUIRE_KEY][REQ_COLOR_CHECKER_KEY] = False
+                        self._db.update_task(task_data)
+
+                if task.cur_step.step_id == StepIndex.DNG_CONVERSION.value:
+                    if task.cur_step.ls_input_images():
+                        task_data[REQUIRE_KEY][REQ_RAW_IMAGE_KEY] = False
+                        self._db.update_task(task_data)
+
+                if task_data[STEP_IN_PROGRESS_KEY]:
                     if task.cur_step.is_finished:
-                        task_data[CUR_STEP_IN_PROGRESS_KEY] = False
+                        task_data[STEP_IN_PROGRESS_KEY] = False
                         if task.cur_step.step_id < StepIndex.COMPLETED.value:
                             task_data[TASK_STEP_KEY] += 1
                         self._db.update_task(task_data)
@@ -257,7 +271,7 @@ class Coordinator(object):
                         <= task.cur_step.step_id
                         <= StepIndex.MESH_CONSTRUCTION.value
                     ) and sent_job:
-                        task_data[CUR_STEP_IN_PROGRESS_KEY] = True
+                        task_data[STEP_IN_PROGRESS_KEY] = True
                         self._db.update_task(task_data)
 
                     if (

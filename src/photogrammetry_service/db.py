@@ -6,7 +6,7 @@ from pymongo import MongoClient
 from pymongo.results import DeleteResult, UpdateResult
 
 from .task import (
-    CUR_STEP_IN_PROGRESS_KEY,
+    STEP_IN_PROGRESS_KEY,
     LATEST_TASK_ID_KEY,
     StepIndex,
     TASK_ID_KEY,

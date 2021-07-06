@@ -16,7 +16,10 @@ LATEST_TASK_ID_KEY = 'latest_task_id'
 TASK_ID_KEY = 'task_id'
 TASK_STEP_KEY = 'step'
 TASK_LOCATION_KEY = 'task_location'
-CUR_STEP_IN_PROGRESS_KEY = 'cur_step_in_progress'
+STEP_IN_PROGRESS_KEY = 'step_in_progress'
+REQUIRE_KEY = 'require'
+REQ_COLOR_CHECKER_KEY = 'color_checker'
+REQ_RAW_IMAGE_KEY = 'raw_image'
 
 BLACK_DNG = 'black.dng'
 CC_BLUR_TIFF = 'color_checker_blur.tiff'
@@ -273,7 +276,7 @@ class NotStartedStep(Step):
                     )
                     self.logger.info(f'Converted {raw_cc.name} to DNG')
                 else:
-                    self.logger.warning(
+                    self.logger.debug(
                         f'{raw_cc.name} not found, please put it in {self.task.cache_dir}'
                     )
                     continue
@@ -295,6 +298,9 @@ class NotStartedStep(Step):
 
                     done = 1
                     self.logger.info(f'Finished blurring process: {tif_cc_blur}')
+
+                    self.output_dir.mkdir(parents=True, exist_ok=True)
+                    self.logger.info(f'Initialized task "{self.task.task_id}" successfully')
                 else:
                     self.logger.warning(f'{dng_cc.name} not found, failed to do blurring')
                     continue
@@ -487,7 +493,7 @@ class Task(object):
             "task_id": int,
             "task_location": str, # E.g. "/path/to/some/folder"
             "step": int,
-            "cur_step_pending": bool,
+            "step_in_progress": bool,
         }
         """
         return self._task_data

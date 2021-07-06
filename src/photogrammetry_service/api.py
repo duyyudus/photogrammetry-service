@@ -2,7 +2,16 @@ import json
 
 from flask import Flask, request
 
-from .task import TASK_ID_KEY, TASK_LOCATION_KEY, TASK_STEP_KEY, CUR_STEP_IN_PROGRESS_KEY, StepIndex
+from .task import (
+    TASK_ID_KEY,
+    TASK_LOCATION_KEY,
+    TASK_STEP_KEY,
+    STEP_IN_PROGRESS_KEY,
+    REQUIRE_KEY,
+    REQ_COLOR_CHECKER_KEY,
+    REQ_RAW_IMAGE_KEY,
+    StepIndex,
+)
 from .task_coordinator import Status, DatabaseAdapter
 
 
@@ -35,7 +44,11 @@ class ApiHandler(object):
                     TASK_ID_KEY: new_task_id,
                     TASK_LOCATION_KEY: task_location,
                     TASK_STEP_KEY: StepIndex.NOT_STARTED.value,
-                    CUR_STEP_IN_PROGRESS_KEY: False,
+                    STEP_IN_PROGRESS_KEY: False,
+                    REQUIRE_KEY: {
+                        REQ_COLOR_CHECKER_KEY: True,
+                        REQ_RAW_IMAGE_KEY: True,
+                    },
                 }
 
                 status, data, message = self._db_adaptor.add_task(task_data)
