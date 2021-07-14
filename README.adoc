@@ -1,4 +1,4 @@
-# Photogrammetry Service
+# Photogrammetry Service Backend
 
 Backend for *Photogrammetry Service*
 
@@ -13,12 +13,35 @@ Depend on `Step` of `Task`, there is additional external program that take over 
 
 Each component is basically a standalone process.
 
+## How to start the service
+
+### 1. Install dependencies
+
 *Windows*
 
-`scripts/start_redis.cmd` : run Redis executable in `win_dependences` folder. You can also use Redis Docker as alternative.
+Install Python 3.8 at `C:\Python38`
 
-*Linux/Mac*
+Then run `setup.cmd`
 
-`scripts/start_redis.sh` : run Redis Docker container.
+*Mac/Linux*
 
-NOTE: Although this backend can run on Linux/Mac, some image processing components will be able to work only on Windows
+Install Python >=3.8 and add `python3` to `PATH`
+
+Then run `setup.sh`
+
+### 2. Install external applications
+
+These apps need to be installed and configured in `config.py`
+
+- Adobe DNG Converter
+- Reality Capture
+
+### 3. Run services ( Windows only )
+
+- run_coordinator.cmd
+- run_redis.cmd
+- run_server.cmd
+- run_worker.cmd
+
+NOTE: Please check `config.py` before running to ensure all parameters are set properly. +
+Although this backend can run on Linux/Mac, *Reality Capture* is only available on Windows.
