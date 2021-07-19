@@ -10,6 +10,7 @@ from .task import (
     REQUIRE_KEY,
     REQ_COLOR_CHECKER_KEY,
     REQ_RAW_IMAGE_KEY,
+    PAUSED_KEY,
     StepIndex,
 )
 from .task_coordinator import Status, DatabaseAdapter
@@ -49,6 +50,7 @@ class ApiHandler(object):
                         REQ_COLOR_CHECKER_KEY: True,
                         REQ_RAW_IMAGE_KEY: True,
                     },
+                    PAUSED_KEY: True,
                 }
 
                 status, data, message = self._db_adaptor.add_task(task_data)
@@ -121,6 +123,40 @@ class ApiHandler(object):
 
             if task_id or task_id == 0 or all_tasks:
                 status, task_data, message = self._db_adaptor.restart_task(task_id, all_tasks)
+            else:
+                status = Status.ERROR.value
+                task_data = {}
+                message = 'Please provide task ID'
+
+            return {'status': status, 'data': task_data, 'message': message}
+
+        @self._server.route('/pause_task', methods=['POST'])
+        def pause_task():
+            task_id = request.args.get('task_id', type=int)
+
+            if task_id or task_id == 0:
+                status, task_data, message = self._db_adaptor.get_task(task_id)
+                task_data[PAUSED_KEY] = True
+                status, task_data, message = self._db_adaptor.update_task(task_data)
+                task_data = None
+                message = f'Paused task: {task_id}'
+            else:
+                status = Status.ERROR.value
+                task_data = {}
+                message = 'Please provide task ID'
+
+            return {'status': status, 'data': task_data, 'message': message}
+
+        @self._server.route('/start_task', methods=['POST'])
+        def start_task():
+            task_id = request.args.get('task_id', type=int)
+
+            if task_id or task_id == 0:
+                status, task_data, message = self._db_adaptor.get_task(task_id)
+                task_data[PAUSED_KEY] = False
+                status, task_data, message = self._db_adaptor.update_task(task_data)
+                task_data = None
+                message = f'Started task: {task_id}'
             else:
                 status = Status.ERROR.value
                 task_data = {}

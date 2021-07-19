@@ -21,6 +21,7 @@ from .task import (
     STEP_METADATA,
     TASK_ID_KEY,
     TASK_STEP_KEY,
+    PAUSED_KEY,
     StepIndex,
     Task,
 )
@@ -225,8 +226,10 @@ class Coordinator(object):
                         self.logger.info(
                             f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished'
                         )
+                    if task.paused:
+                        continue
 
-                    elif task.cur_step.step_id == StepIndex.NOT_STARTED.value:
+                    if task.cur_step.step_id == StepIndex.NOT_STARTED.value:
                         worker.init_task_job.send(task_data)
                         sent_job = 1
                         self.logger.info(f'Sent init_task_job, task: {task_id}')

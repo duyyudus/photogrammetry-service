@@ -20,6 +20,7 @@ STEP_IN_PROGRESS_KEY = 'step_in_progress'
 REQUIRE_KEY = 'require'
 REQ_COLOR_CHECKER_KEY = 'color_checker'
 REQ_RAW_IMAGE_KEY = 'raw_image'
+PAUSED_KEY = 'paused'
 
 BLACK_DNG = 'black.dng'
 CC_BLUR_TIFF = 'color_checker_blur.tiff'
@@ -515,3 +516,7 @@ class Task(object):
         """The current step."""
         step_id = self._task_data[TASK_STEP_KEY]
         return STEP_CLASS_MAP[step_id](step_id, self)
+
+    @property
+    def paused(self) -> bool:
+        return self._task_data[PAUSED_KEY]
