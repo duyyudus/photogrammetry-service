@@ -4,6 +4,7 @@ from logging.config import dictConfig
 from typing import Union
 
 from flask import Flask
+from flask_cors import CORS
 
 from .api import ApiHandler
 from .db import DB
@@ -17,6 +18,8 @@ class ServerConfigNotFound(Exception):
 def create_server(cfg: Union[str, dict]) -> Flask:
 
     server = Flask(__name__)
+    cors = CORS(server)
+    server.config['CORS_HEADERS'] = 'Content-Type'
 
     if isinstance(cfg, str):
         if osp.exists(cfg):

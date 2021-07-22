@@ -16,6 +16,7 @@ deps = {
         'Flask',
         'pymongo',
         'scikit-image',
+        'flask-cors',
     ],
     'test': [],
     'dev': ['pylint', 'flake8', 'autopep8', 'rope', 'black'],

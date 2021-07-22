@@ -1,6 +1,7 @@
 import json
 
 from flask import Flask, request
+from flask_cors import cross_origin
 
 from .task import (
     TASK_ID_KEY,
@@ -26,6 +27,7 @@ class ApiHandler(object):
 
     def register_api(self):
         @self._server.route('/about')
+        @cross_origin()
         def about():
             return {
                 'status': Status.SUCCESS.value,
@@ -34,6 +36,7 @@ class ApiHandler(object):
             }
 
         @self._server.route('/add_task', methods=['POST'])
+        @cross_origin()
         def add_task():
             task_location = request.args.get(TASK_LOCATION_KEY, type=str)
             self._server.logger.debug('Added task:')
@@ -63,6 +66,7 @@ class ApiHandler(object):
             return {'status': status, 'data': data, 'message': message}
 
         @self._server.route('/get_task')
+        @cross_origin()
         def get_task():
             """Return task data from task ID"""
             task_id = request.args.get('task_id', type=int)
@@ -78,6 +82,7 @@ class ApiHandler(object):
             return {'status': status, 'data': task_data, 'message': message}
 
         @self._server.route('/update_task', methods=['POST'])
+        @cross_origin()
         def update_task():
             """Update task"""
             task_data = request.args.get('task_data', type=str)
@@ -94,6 +99,7 @@ class ApiHandler(object):
             return {'status': status, 'data': data, 'message': message}
 
         @self._server.route('/delete_task', methods=['POST'])
+        @cross_origin()
         def delete_task():
             """Delete task"""
             task_id = request.args.get('task_id', type=int)
@@ -109,12 +115,14 @@ class ApiHandler(object):
             return {'status': status, 'data': data, 'message': message}
 
         @self._server.route('/ls_tasks')
+        @cross_origin()
         def ls_tasks():
             """Return a list of task IDs"""
             status, data, message = self._db_adaptor.ls_tasks()
             return {'status': status, 'data': data, 'message': message}
 
         @self._server.route('/restart_task', methods=['POST'])
+        @cross_origin()
         def restart_task():
             """Force process a specific task or all tasks"""
             task_id = request.args.get('task_id', type=int)
@@ -131,6 +139,7 @@ class ApiHandler(object):
             return {'status': status, 'data': task_data, 'message': message}
 
         @self._server.route('/pause_task', methods=['POST'])
+        @cross_origin()
         def pause_task():
             task_id = request.args.get('task_id', type=int)
 
@@ -148,6 +157,7 @@ class ApiHandler(object):
             return {'status': status, 'data': task_data, 'message': message}
 
         @self._server.route('/start_task', methods=['POST'])
+        @cross_origin()
         def start_task():
             task_id = request.args.get('task_id', type=int)
 
