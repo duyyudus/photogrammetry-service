@@ -21,6 +21,9 @@ REQUIRE_KEY = 'require'
 REQ_COLOR_CHECKER_KEY = 'color_checker'
 REQ_RAW_IMAGE_KEY = 'raw_image'
 PAUSED_KEY = 'paused'
+IMG_PROGRESS_KEY = 'image_progress'
+IMG_PROGRESS_COMPLETED_KEY = 'completed'
+IMG_PROGRESS_TOTAL_KEY = 'total'
 
 BLACK_DNG = 'black.dng'
 CC_BLUR_TIFF = 'color_checker_blur.tiff'
@@ -104,6 +107,13 @@ class Step(ABC):
         self._step_id = step_id
         self._task = task
 
+        if self.input_dir:
+            if not self.input_dir.exists():
+                self.input_dir.mkdir(parents=True, exist_ok=True)
+        if self.output_dir:
+            if not self.output_dir.exists():
+                self.output_dir.mkdir(parents=True, exist_ok=True)
+
     @property
     def step_id(self) -> int:
         return self._step_id
@@ -142,10 +152,20 @@ class Step(ABC):
             p = None
         return p
 
+    @property
+    def input_images_count(self) -> int:
+        return len(self.ls_input_images())
+
+    @property
+    def output_images_count(self) -> int:
+        return len(self.ls_output_images())
+
     def ls_input_images(self, image_name_only=True) -> List[Union[Path, str]]:
         """List of images in input data folder, if any"""
 
         images = []
+        if not self.input_dir:
+            return images
         if not self.input_dir.exists():
             return images
 
@@ -164,6 +184,8 @@ class Step(ABC):
         """List of images in output data folder, if any"""
 
         images = []
+        if not self.output_dir:
+            return images
         if not self.output_dir.exists():
             return images
 
@@ -230,8 +252,6 @@ class Step(ABC):
 
 ##########################################################################################
 ###############################################################################
-
-# TODO WIP: implement different types of Step here
 
 
 class NotStartedStep(Step):
@@ -318,7 +338,7 @@ class DngConversionStep(Step):
 
     @property
     def is_finished(self) -> bool:
-        a = len(self.ls_input_images()) == len(self.ls_output_images())
+        a = len(self.ls_output_images()) >= len(self.ls_input_images())
         b = len(self.ls_output_images()) > 0
         return a and b
 
@@ -344,7 +364,7 @@ class ColorCorrectionStep(Step):
 
     @property
     def is_finished(self) -> bool:
-        a = len(self.ls_input_images()) == len(self.ls_output_images())
+        a = len(self.ls_output_images()) >= len(self.ls_input_images())
         b = len(self.ls_output_images()) > 0
         return a and b
 

@@ -12,6 +12,9 @@ from .task import (
     REQ_COLOR_CHECKER_KEY,
     REQ_RAW_IMAGE_KEY,
     PAUSED_KEY,
+    IMG_PROGRESS_KEY,
+    IMG_PROGRESS_TOTAL_KEY,
+    IMG_PROGRESS_COMPLETED_KEY,
     StepIndex,
 )
 from .task_coordinator import Status, DatabaseAdapter
@@ -54,6 +57,10 @@ class ApiHandler(object):
                         REQ_RAW_IMAGE_KEY: True,
                     },
                     PAUSED_KEY: True,
+                    IMG_PROGRESS_KEY: {
+                        IMG_PROGRESS_COMPLETED_KEY: 0,
+                        IMG_PROGRESS_TOTAL_KEY: 0,
+                    },
                 }
 
                 status, data, message = self._db_adaptor.add_task(task_data)
@@ -146,6 +153,7 @@ class ApiHandler(object):
             if task_id or task_id == 0:
                 status, task_data, message = self._db_adaptor.get_task(task_id)
                 task_data[PAUSED_KEY] = True
+                task_data[STEP_IN_PROGRESS_KEY] = False
                 status, task_data, message = self._db_adaptor.update_task(task_data)
                 task_data = None
                 message = f'Paused task: {task_id}'

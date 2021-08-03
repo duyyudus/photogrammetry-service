@@ -22,6 +22,9 @@ from .task import (
     TASK_ID_KEY,
     TASK_STEP_KEY,
     PAUSED_KEY,
+    IMG_PROGRESS_KEY,
+    IMG_PROGRESS_COMPLETED_KEY,
+    IMG_PROGRESS_TOTAL_KEY,
     StepIndex,
     Task,
 )
@@ -116,6 +119,7 @@ class DatabaseAdapter(object):
             for task_data in tasks:
                 task_data[TASK_STEP_KEY] = StepIndex.NOT_STARTED.value
                 task_data[STEP_IN_PROGRESS_KEY] = False
+                task_data[PAUSED_KEY] = False
                 self._db.update_task(task_data)
         except Exception as e:
             message = str(e)
@@ -203,8 +207,10 @@ class Coordinator(object):
                         self._db.update_task(task_data)
 
                 if task.cur_step.step_id == StepIndex.DNG_CONVERSION.value:
-                    if task.cur_step.ls_input_images():
+                    input_images_count = task.cur_step.input_images_count
+                    if input_images_count:
                         task_data[REQUIRE_KEY][REQ_RAW_IMAGE_KEY] = False
+                        task_data[IMG_PROGRESS_KEY][IMG_PROGRESS_TOTAL_KEY] = input_images_count
                         self._db.update_task(task_data)
 
                 if task_data[STEP_IN_PROGRESS_KEY]:
@@ -216,6 +222,7 @@ class Coordinator(object):
                         self.logger.info(
                             f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished'
                         )
+
                 else:
                     sent_job = 0
 
@@ -226,6 +233,7 @@ class Coordinator(object):
                         self.logger.info(
                             f'Step {STEP_METADATA[task.cur_step.step_id]["name"]} is finished'
                         )
+                        continue
                     if task.paused:
                         continue
 
@@ -282,6 +290,21 @@ class Coordinator(object):
                         and task.task_id in color_swatch_cache
                     ):
                         color_swatch_cache.pop(task.task_id)
+
+                # Update image processing progress
+                if (
+                    StepIndex.DNG_CONVERSION.value
+                    <= task.cur_step.step_id
+                    <= StepIndex.COLOR_CORRECTION.value
+                ):
+                    input_images_count = task.cur_step.input_images_count
+                    output_images_count = task.cur_step.output_images_count
+                    task_data[IMG_PROGRESS_KEY][IMG_PROGRESS_COMPLETED_KEY] = output_images_count
+                    task_data[IMG_PROGRESS_KEY][IMG_PROGRESS_TOTAL_KEY] = input_images_count
+                else:
+                    task_data[IMG_PROGRESS_KEY][IMG_PROGRESS_COMPLETED_KEY] = 0
+                    task_data[IMG_PROGRESS_KEY][IMG_PROGRESS_TOTAL_KEY] = 0
+                self._db.update_task(task_data)
 
             self.logger.debug('DONE')
             self.logger.debug('')
