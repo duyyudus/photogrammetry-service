@@ -13,6 +13,8 @@ Depend on `Step` of `Task`, there is additional external program that take over 
 
 Each component is basically a standalone process.
 
+image::docs/pho-diagram.png[]
+
 ## How to start the service
 
 ### 1. Install dependencies
